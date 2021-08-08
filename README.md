@@ -22,6 +22,8 @@ Our dataset, COVID-19 Case Surveillance Public Use Data (https://data.cdc.gov/Ca
 
 Each case provided in the dataset includes gender, age group, race, hospitalization and ICU admission, date of onset, date of testing positive, the presence of comorbidities, and death status. Not every case has complete information as the focus of the dataset is inclusion rather than completeness. All data is included in a single file that occupies 594MB on disk. The CSV table contains about 5.7 million rows and 11 columns. 
 
+The dataset is intended for public access and use. No license information was provided. Since it was most likely prepared by an officer or employee of the United States government as part of their official duties it is considered a U.S. Government Work. 
+
 ### Variable Explanations and Data Assumptions
 Our goal was to use our dataset to predict the number of deaths caused by COVID-19 infections. To accomplish this we used 7 independent variables, three are categorical, and the other fourare integers. The variables are described as follows:
 1. **Rolling Death Rate** – The two week rolling average death rate. **Dependent Variable**
