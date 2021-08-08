@@ -2,9 +2,9 @@
 # DATA 603 Final Project
 
 **Authors:**
-Ryan Johnston (https://github.com/astroryan97)
-Jacob Greenbow (https://github.com/jgreenbow)
-Troy Stolz (https://github.com/Salsasharkz)
+Ryan Johnston (https://github.com/astroryan97) <br>
+Jacob Greenbow (https://github.com/jgreenbow) <br>
+Troy Stolz (https://github.com/Salsasharkz) <br>
 
 ## Introduction
 
