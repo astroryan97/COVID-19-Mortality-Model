@@ -13,7 +13,9 @@ It first appeared in Wuhan, China during December of 2019 and quickly spread acr
 
 There has been an extensive amount of research that has been done over the past year on COVID-19, including the origin and cause, the spread of the virus, treatment, and  a possible cure or vaccination (An-dersen et al. 2020, van Doremalen et al. 2020, Xu & Li 2020). Additionally, there has also been a large number of studies investigating non-medial aspects related to COVID-19 such as it's impact on the economy, the role of politics, religion, and how it has changed human culture  (McKibbin & Fernando 2020). However, there are still plenty of unknowns that remain as the COVID-19 pandemic continues into 2021 and possibly 2022. In this project we will explore the statistical modelling of COVID-19 data in the United States to predict the number of deaths caused by COVID-19 infections.
 
-This readme is a summary of our work. **Please read the final report for a full breakdown.**
+This README is a condensed summary of our work. **Please read the final report for a full breakdown and analysis.** 
+
+Alternatively, you can view our PowerPoint Presentation at https://docs.google.com/presentation/d/e/2PACX-1vRKRrdWwxATz01SyrOZijKmnjXunNAVO6iCAqFp__5XI6AuKyMByK48SIGyON-mYaEMIGwSbXgcoYwW/pub?start=false&loop=false&delayms=30000
 
 ## Methodology
 ### The Data
