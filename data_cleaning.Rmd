@@ -1,0 +1,45 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+```
+
+```{r}
+covid19.US = read.csv("COVID-19_Case_Surveillance_Public_Use_Data.csv")
+```
+
+```{r}
+# Remove all values that do not have a yes or no entry in the appropriate columns
+covid.US.Clean = covid19.US[covid19.US$death_yn %in% c("Yes","No"),]
+covid.US.Clean = covid.US.Clean[covid.US.Clean$hosp_yn %in% c("Yes","No"),]
+covid.US.Clean = covid.US.Clean[covid.US.Clean$icu_yn %in% c("Yes","No"),]
+covid.US.Clean = covid.US.Clean[covid.US.Clean$medcond_yn %in% c("Yes","No"),]
+# Remove all instances where race is unknown in the dataset
+covid.US.Clean = covid.US.Clean[!(covid.US.Clean$Race.and.ethnicity..combined. == "Unknown"),]
+# Code the death_yn from yes/no to 1/0 
+covid.US.Clean$death_code = ifelse(covid.US.Clean$death_yn=="Yes", 1, 0)
+# Sort the dataset by date
+covid.US.Clean = covid.US.Clean[order(as.Date(covid.US.Clean$cdc_report_dt, format="%Y/%m/%d")),]
+```
+
+```{r}
+# Take the cumulative sum of death_code and create a column death_count
+covid.US.Clean = covid.US.Clean %>%
+  mutate(death_count = cumsum(death_code))
+```
+
+```{r}
+covid.US.Clean = covid.US.Clean %>%
+  group_by(cdc_report_dt)
+```
+
+```{r}
+ggplot(data=covid.US.Clean, aes(x=cdc_report_dt, y=death_count)) +
+  geom_point()
+```

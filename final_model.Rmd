@@ -1,0 +1,326 @@
+---
+title: "R Notebook"
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+## Load data
+
+```{r}
+covid = read.csv("us_rolling.csv")
+head(covid)
+covid.lm = lm(deaths_roll~., data = covid)
+summary(covid.lm)
+```
+## Multicollinearity
+
+```{r}
+imcdiag(covid.lm,  method = "VIF")
+```
+
+## First order model selected
+
+```{r}
+covid.1ord = lm(deaths_roll ~ age_group + race_ethnicity + sex + cases + hosp + icu, data = covid)
+summary(covid.1ord)
+```
+## Interaction terms
+
+```{r}
+covid.inter.full = lm(deaths_roll ~ (age_group + race_ethnicity + sex + cases + hosp + icu)^2, data = covid)
+summary(covid.inter.full)
+```
+### Interaction model selected
+
+```{r}
+covid.inter1 = lm(deaths_roll~age_group+race_ethnicity+sex+cases+hosp+icu 
+                  +age_group*(race_ethnicity+sex+cases) 
+                  +race_ethnicity*sex 
+                  +sex*(hosp+icu) 
+                  +cases*(hosp+icu) 
+                  +hosp*icu, 
+                  data = covid)
+summary(covid.inter1)
+```
+## Higher order terms
+
+```{r}
+library(ggplot2)
+library(GGally)
+ggpairs(data=covid, columns=c("deaths_roll", "cases", "hosp", "icu"),
+        lower = list(continuous = "smooth_loess", combo =
+  "facethist", discrete = "facetbar", na = "na"))
+```
+
+### Higher order model selected
+```{r}
+covid.2ord = lm(deaths_roll~age_group+race_ethnicity+sex+cases+hosp+icu 
+                  +age_group*(race_ethnicity+sex+cases) 
+                  +race_ethnicity*sex 
+                  +sex*(hosp+icu) 
+                  +cases*(hosp+icu) 
+                  +hosp*icu
+                  +I(cases^2)
+                  +I(hosp^2)
+                  +I(icu^2), 
+                  data = covid)
+summary(covid.2ord)
+```
+```{r}
+covid.lm = covid.2ord
+```
+
+
+## ANOVA Table
+
+```{r}
+covid.null = lm(deaths_roll~1, data = covid)
+anova(covid.null, covid.1ord)
+anova(covid.null, covid.lm)
+anova(covid.1ord, covid.lm)
+```
+# Model Assumptions
+## Linearity Assumption
+
+```{r}
+ggplot(covid.lm, aes(x=.fitted, y=.resid)) +
+  geom_point() +geom_smooth()+
+  geom_hline(yintercept = 0)+
+  ggtitle("Residual plot: Residual vs Fitted values") 
+```
+
+## Normality Assumption
+
+```{r}
+ggplot(covid.lm, aes(x=.resid)) +
+  geom_histogram(binwidth = 5)
+```
+```{r}
+ggplot(covid.lm, aes(sample = .resid)) +
+  stat_qq() +
+  stat_qq_line()
+```
+```{r}
+shapiro.test(x = sample(residuals(covid.lm), 5000))
+```
+
+
+## Homoscedasticity assumption
+```{r}
+library(lmtest) # for Breusch-Pagan test
+```
+
+```{r}
+bptest(covid.lm)
+```
+
+## Outliers
+
+```{r}
+# Cook's distance
+par(mfrow=c(2,2))
+plot(covid.lm, which = 5)
+plot(covid.lm,pch=18,col="red",which=c(4))
+
+# Leverage Point
+# set parameters
+bestmodel = covid.lm
+data = covid
+
+lev=hatvalues(bestmodel)
+p = length(coef(bestmodel))
+n = nrow(data)
+outlier = lev[lev>(2*p/n)]
+print(outlier)
+plot(rownames(data),lev, main = "Leverage in COVID-19 Dataset", xlab="observation",
+    ylab = "Leverage Value")
+abline(h = 2 *p/n, lty = 1)
+abline(h = 3 *p/n, lty = 1)
+```
+
+```{r}
+covid.clean = covid[lev<(2*p/n),]
+covid.lmc = lm(deaths_roll~age_group+race_ethnicity+sex+cases+hosp+icu 
+                  +age_group*(race_ethnicity+sex+cases) 
+                  +race_ethnicity*sex 
+                  +sex*(hosp+icu) 
+                  +cases*(hosp+icu) 
+                  +hosp*icu
+                  +I(cases^2)
+                  +I(hosp^2)
+                  +I(icu^2), 
+                  data = covid.clean)
+summary(covid.lmc)
+```
+
+# Box-Cox Transformation
+
+```{r}
+library(MASS) #for the boxcox()function
+```
+
+```{r}
+bc=boxcox(covid.lmc,lambda=seq(-4,1))
+bl=bc$x[which(bc$y==max(bc$y))]
+bl
+```
+
+```{r}
+covid.bc = lm(((deaths_roll^bl-1)/bl)~age_group+race_ethnicity+sex+cases+hosp+icu 
+                  +age_group*(race_ethnicity+sex+cases) 
+                  +race_ethnicity*sex 
+                  +sex*(hosp+icu) 
+                  +cases*(hosp+icu) 
+                  +hosp*icu
+                  +I(cases^2)
+                  +I(hosp^2)
+                  +I(icu^2), 
+                  data = covid)
+summary(covid.bc)
+```
+
+### Box-Cox Outliers
+
+```{r}
+# Cook's distance
+par(mfrow=c(2,2))
+plot(covid.lm, which = 5)
+plot(covid.lm,pch=18,col="red",which=c(4))
+
+# Leverage Point
+# set parameters
+bestmodel = covid.bc
+data = covid
+
+lev=hatvalues(bestmodel)
+p = length(coef(bestmodel))
+n = nrow(data)
+outlier = lev[lev>(2*p/n)]
+print(outlier)
+plot(rownames(data),lev, main = "Leverage in COVID-19 Dataset", xlab="observation",
+    ylab = "Leverage Value")
+abline(h = 2 *p/n, lty = 1)
+abline(h = 3 *p/n, lty = 1)
+```
+
+```{r}
+covid.clean = covid[lev<(2*p/n),]
+covid.bcc = lm(((deaths_roll^bl-1)/bl)~age_group+race_ethnicity+sex+cases+hosp+icu 
+                  +age_group*(race_ethnicity+sex+cases) 
+                  +race_ethnicity*sex 
+                  +sex*(hosp+icu) 
+                  +cases*(hosp+icu) 
+                  +hosp*icu
+                  +I(cases^2)
+                  +I(hosp^2)
+                  +I(icu^2), 
+                  data = covid.clean)
+summary(covid.bcc)
+```
+
+
+```{r}
+ggplot(covid.bcc, aes(x=.fitted, y=.resid)) +
+  geom_point() +geom_smooth()+
+  geom_hline(yintercept = 0)+
+  ggtitle("COVID-19 Model - Box-Cox Transformed", subtitle = "Residual plot: Residual vs Fitted values")
+```
+
+```{r}
+bptest(covid.bcc)
+```
+
+
+
+
+```{r}
+ggplot(covid.bcc, aes(sample = .resid)) +
+  stat_qq(col = '#3EB489') +
+  stat_qq_line(col = '#64C310')+
+  ggtitle("COVID Model - Box-Cox Transformed - Normal Q-Q Plot")
+```
+```{r}
+shapiro.test(x = sample(residuals(covid.bcc),5000))
+```
+
+# Log transformed model
+```{r}
+covid.log = lm(log(deaths_roll)~age_group+race_ethnicity+sex+cases+hosp+icu 
+                  +age_group*(race_ethnicity+sex+cases) 
+                  +race_ethnicity*sex 
+                  +sex*(hosp+icu) 
+                  +cases*(hosp+icu) 
+                  +hosp*icu
+                  +I(cases^2)
+                  +I(hosp^2)
+                  +I(icu^2), 
+                  data = covid)
+summary(covid.log)
+```
+
+
+```{r}
+ggplot(covid.log, aes(x=.fitted, y=.resid)) +
+  geom_point() +geom_smooth()+
+  geom_hline(yintercept = 0)+
+  ggtitle("COVID-19 Model - Log Transformed", subtitle = "Residual plot: Residual vs Fitted values")
+```
+
+```{r}
+bptest(covid.log)
+```
+
+```{r}
+ggplot(covid.bc, aes(sample = .resid)) +
+  stat_qq(col = '#3EB489') +
+  stat_qq_line(col = '#64C310')+
+  ggtitle("COVID Model - Log Transformed - Normal Q-Q Plot")
+```
+```{r}
+shapiro.test(x = sample(residuals(covid.log),5000))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
