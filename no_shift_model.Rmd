@@ -1,0 +1,329 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# No shift model
+
+```{r}
+covid = read.csv("us_shift0_roll14.csv")
+head(covid)
+```
+```{r}
+covid.full = lm(deaths~., data = covid)
+summary(covid.full)
+```
+Dropped medcond
+
+```{r}
+covid.lm = lm(deaths~age_group+race_ethnicity+sex+cases+hosp+icu, data = covid)
+imcdiag(covid.lm, method = "VIF")
+```
+No issues
+
+```{r}
+covid.ap = ols_step_best_subset(covid.full, detail = F)
+covid.ap
+```
+
+Model 6 confirms our choice to exclude medcond.
+
+```{r}
+ks = covid.ap
+
+par(mfrow=c(2,2)) # split the plotting panel into a 2 x 2 grid
+plot(ks$cp,type = "o",pch=10, xlab="Number of Variables",ylab= "Cp")
+plot(ks$rsq,type = "o",pch=10, xlab="Number of Variables",ylab= "R^2")
+#plot(ks$rss, xlab="Number of Variables",ylab= "RMSE")
+plot(ks$aic,type = "o",pch=10, xlab="Number of Variables",ylab= "AIC")
+plot(ks$adjr,type = "o",pch=10, xlab="Number of Variables",ylab= "Adjusted R^2")
+```
+```{r}
+summary(covid.lm)
+```
+
+
+
+### Interaction and Second order model
+
+```{r}
+summary(lm(deaths~(age_group+race_ethnicity+sex+cases+hosp+icu)^2, data = covid))
+```
+
+
+```{r}
+covid.inter = lm(deaths~age_group+race_ethnicity+sex+cases+hosp+icu
+                 +age_group*(race_ethnicity+sex+cases) 
+                 +race_ethnicity*sex 
+                 +sex*(hosp+icu) 
+                 +cases*(hosp+icu) 
+                 +hosp*icu, data = covid)
+summary(covid.inter)
+```
+```{r}
+ggpairs(data=covid, aes(col=age_group), columns=c("deaths", "cases", "hosp", "icu"),
+        lower = list(continuous = "smooth_loess", combo =
+  "facethist", discrete = "facetbar", na = "na"))
+```
+
+
+```{r}
+covid.2ord = lm(deaths~age_group+race_ethnicity+sex+cases+hosp+icu
+                 +age_group*(race_ethnicity+sex+cases) 
+                 +race_ethnicity*sex 
+                 +sex*(hosp+icu) 
+                 +cases*(hosp+icu) 
+                 +hosp*icu
+                 +I(cases^2)
+                 +I(hosp^2)
+                 +I(icu^2), 
+                data = covid)
+summary(covid.2ord)
+```
+Was this really adding anything?
+
+```{r}
+anova(covid.inter, covid.2ord)
+```
+YUP.
+
+```{r}
+covid.lm = covid.2ord
+covid.null = lm(deaths~1, data = covid)
+anova(covid.null, covid.lm)
+```
+
+# Model Assumptions
+## Linearity Assumption
+
+```{r}
+ggplot(covid.lm, aes(x=.fitted, y=.resid)) +
+  geom_point(size = 1, alpha = 0.2) +geom_smooth()+
+  geom_hline(yintercept = 0)+
+  ggtitle("Residual plot: Residual vs Fitted values") +
+  xlab("Fitted value") +
+  ylab("Residual (error term)")
+```
+
+```{r}
+ggplot(covid.lm, aes(sample = .resid)) +
+  stat_qq(size = 0.1, col = "dodgerblue2") +
+  stat_qq_line(col = "firebrick2") +
+  ggtitle("Q-Q plot: Sample vs Theoretical Quantiles") +
+  xlab("Theoretical Normal Quantile") +
+  ylab("Sample Quantile") 
+```
+We have serious issues with these two assumptions. We will immediately move to 
+Box-Cox transformation
+
+# Box-Cox Transformation
+
+```{r}
+bc=boxcox(covid.lm,lambda=seq(-4,1))
+best_lambda=bc$x[which(bc$y==max(bc$y))]
+best_lambda
+```
+```{r}
+lam = best_lambda
+covid.bc = lm(((deaths^lam-1)/lam)~
+                age_group+race_ethnicity+sex+cases+hosp+icu 
+                +age_group*(race_ethnicity+sex+cases) 
+                +race_ethnicity*sex 
+                +sex*(hosp+icu) 
+                +cases*(hosp+icu) 
+                +hosp*icu
+                +I(cases^2)
+                +I(hosp^2)
+                +I(icu^2), 
+                data = covid)
+summary(covid.bc)
+```
+
+## Assumptions Under Box-Cox
+
+### 1. Linearity
+
+```{r}
+ggplot(covid.bc, aes(x=.fitted, y=.resid)) +
+  geom_point(size = 1, alpha = 0.2) +geom_smooth()+
+  geom_hline(yintercept = 0)+
+  ggtitle("Residual plot: Residual vs Fitted values") +
+  xlab("Fitted value") +
+  ylab("Residual (error term)")
+```
+Looks mostly linear, but some extreme values at the high end skew the tail of the distribution.
+
+
+### 2. Independence Assumption
+
+Unfortunately we have selected data that undoubtedly is affected by time. The variance and overall magnitude of cases has risen over time and our data will have no way of compensating for that.
+
+### 3. Normality Assumption
+
+```{r}
+ggplot(covid.bc, aes(x=.resid)) +
+  geom_histogram(binwidth = 0.25, col = 'dodgerblue3', fill = 'dodgerblue2') +
+  ggtitle("Histogram of Residuals")
+```
+
+```{r}
+ggplot(covid.bc, aes(sample = .resid)) +
+  stat_qq(size = 1, alpha = 0.2, col = "dodgerblue2") +
+  stat_qq_line(col = "firebrick2") +
+  ggtitle("Q-Q plot: Sample vs Theoretical Quantiles") +
+  xlab("Theoretical Normal Quantile") +
+  ylab("Sample Quantile") 
+```
+
+```{r}
+set.seed(603)
+shapiro.test(x = sample(residuals(covid.bc),5000))
+```
+### 4. Equal Variance Assumption (homoscedasticity)
+
+```{r}
+rvf = ggplot(covid.bc, aes(x=.fitted, y=.resid)) +
+  geom_point(size = 1, alpha = 0.2) +geom_smooth()+
+  geom_hline(yintercept = 0)+
+  ggtitle("COVID-19 Box-Cox Model", subtitle = "Residual plot: Residual vs Fitted values")
+scl = ggplot(covid.bc, aes(x=.fitted, y=sqrt(abs(.stdresid)))) +
+  geom_point(size = 1, alpha = 0.2) +geom_smooth()+
+  geom_hline(yintercept = 0)+
+  ggtitle("COVID-19 Box-Cox Model", subtitle = "Scale-Location: Standardized Residual vs Fitted ")
+
+ggarrange(rvf, scl)
+```
+
+```{r}
+bptest(covid.bc)
+```
+
+
+### 5. Multicollinearity 
+
+```{r}
+imcdiag(lm(deaths~age_group+race_ethnicity+sex+cases+hosp+icu, data = covid), method = "VIF")
+```
+
+### 6. Outliers
+
+```{r}
+# Cook's distance
+par(mfrow=c(2,2))
+plot(covid.bc, which = 5)
+plot(covid.bc,pch=18,col="red",which=c(4))
+
+# Leverage Point
+# set parameters
+bestmodel = covid.bc
+data = covid
+
+lev=hatvalues(covid.bc)
+p = length(coef(covid.bc))
+n = nrow(data)
+outlier = lev[lev>(2*p/n)]
+print(outlier)
+plot(rownames(data),lev, main = "Leverage in COVID-19 Dataset", xlab="observation",
+    ylab = "Leverage Value")
+abline(h = 2 *p/n, lty = 1)
+abline(h = 3 *p/n, lty = 1)
+plot(covid.bc,which=6)
+```
+
+
+We have many outliers. Clean data!
+
+```{r}
+covid_clean = covid[lev<(2*p/n),]
+covid_clean.bc = lm(((deaths^lam-1)/lam)~
+                age_group+race_ethnicity+sex+cases+hosp+icu 
+                +age_group*(race_ethnicity+sex+cases) 
+                +race_ethnicity*sex 
+                +sex*(hosp+icu) 
+                +cases*(hosp+icu) 
+                +hosp*icu
+                +I(cases^2)
+                +I(hosp^2)
+                +I(icu^2), 
+                data = covid_clean)
+summary(covid_clean.bc)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Ignore the below, just retesting the assumptions, but they still fail
+
+
+### Linearity
+```{r}
+ggplot(covid_clean.bc, aes(x=.fitted, y=.resid)) +
+  geom_point(size = 1, alpha = 0.2) +geom_smooth()+
+  geom_hline(yintercept = 0)+
+  ggtitle("Residual plot: Residual vs Fitted values") +
+  xlab("Fitted value") +
+  ylab("Residual (error term)")
+```
+
+### Normality
+
+```{r}
+ggplot(covid_clean.bc, aes(x=.resid)) +
+  geom_histogram(binwidth = 0.25, col = 'dodgerblue3', fill = 'dodgerblue2') +
+  ggtitle("Histogram of Residuals")
+```
+
+```{r}
+ggplot(covid_clean.bc, aes(sample = .resid)) +
+  stat_qq(size = 1, alpha = 0.2, col = "dodgerblue2") +
+  stat_qq_line(col = "firebrick2") +
+  ggtitle("Q-Q plot: Sample vs Theoretical Quantiles") +
+  xlab("Theoretical Normal Quantile") +
+  ylab("Sample Quantile") 
+```
+
+```{r}
+set.seed(603)
+shapiro.test(x = sample(residuals(covid_clean.bc),5000))
+```
+### Equal Variance Assumption (homoscedasticity)
+
+```{r}
+rvf = ggplot(covid_clean.bc, aes(x=.fitted, y=.resid)) +
+  geom_point(size = 1, alpha = 0.2) +geom_smooth()+
+  geom_hline(yintercept = 0)+
+  ggtitle("COVID-19 Box-Cox Model", subtitle = "Residual plot: Residual vs Fitted values")
+scl = ggplot(covid_clean.bc, aes(x=.fitted, y=sqrt(abs(.stdresid)))) +
+  geom_point(size = 1, alpha = 0.2) +geom_smooth()+
+  geom_hline(yintercept = 0)+
+  ggtitle("COVID-19 Box-Cox Model", subtitle = "Scale-Location: Standardized Residual vs Fitted ")
+
+ggarrange(rvf, scl)
+```
+
+```{r}
+bptest(covid_clean.bc)
+```
+
